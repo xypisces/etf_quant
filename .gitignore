@@ -43,5 +43,5 @@ venv.bak/
 
 # Temporary
 *.log
-png/
+results/
 csv/
