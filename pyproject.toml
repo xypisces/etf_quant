@@ -1,0 +1,11 @@
+[project]
+name = "etf-quant"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "akshare>=1.18.25",
+    "matplotlib>=3.10.8",
+    "pandas>=3.0.0",
+]

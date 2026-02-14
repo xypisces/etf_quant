@@ -1,0 +1,47 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Project Specific
+*.csv
+*.png
+.DS_Store
+.idea/
+.vscode/
+
+# OpenSpec Archive (keep, but ignore contents if desired? No, usually keep archive in repo)
+# openspec/changes/archive/
+
+# Temporary
+*.log
+png/
+csv/
