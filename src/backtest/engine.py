@@ -29,6 +29,8 @@ class BacktestResult:
     """回测结果"""
     equity_curve: pd.Series = field(default_factory=pd.Series)
     daily_returns: pd.Series = field(default_factory=pd.Series)
+    benchmark_returns: pd.Series = field(default_factory=pd.Series)
+    benchmark_curve: pd.Series = field(default_factory=pd.Series)
     trades: list[dict] = field(default_factory=list)
     final_equity: float = 0.0
     initial_capital: float = 0.0
@@ -61,6 +63,7 @@ class BacktestEngine:
         self._cash = initial_capital
         self._position = 0          # 持仓数量
         self._entry_price = 0.0     # 开仓均价
+        self._entry_date = ""       # 开仓日期
         self._equity_history: list[dict] = []
         self._trades: list[dict] = []
 
@@ -133,7 +136,7 @@ class BacktestEngine:
                 }
             )
 
-        return self._build_result()
+        return self._build_result(data)
 
     def _execute_buy(self, price: float, date: str) -> None:
         """执行买入"""
@@ -168,6 +171,7 @@ class BacktestEngine:
         self._cash -= total_cost
         self._position = quantity
         self._entry_price = actual_price
+        self._entry_date = date
 
     def _execute_sell(self, price: float, date: str, reason: str = "") -> None:
         """执行卖出"""
@@ -190,7 +194,7 @@ class BacktestEngine:
         # 记录交易
         self._trades.append(
             {
-                "date_open": getattr(self, "_entry_date", date),
+                "date_open": self._entry_date or date,
                 "date_close": date,
                 "side": "LONG",
                 "quantity": self._position,
@@ -207,17 +211,19 @@ class BacktestEngine:
         self._cash += trade_value - commission
         self._position = 0
         self._entry_price = 0.0
+        self._entry_date = ""
 
     def _reset(self) -> None:
         """重置引擎状态"""
         self._cash = self.initial_capital
         self._position = 0
         self._entry_price = 0.0
+        self._entry_date = ""
         self._equity_history.clear()
         self._trades.clear()
         self.strategy.reset()
 
-    def _build_result(self) -> BacktestResult:
+    def _build_result(self, data: pd.DataFrame | None = None) -> BacktestResult:
         """构建回测结果"""
         if not self._equity_history:
             return BacktestResult(initial_capital=self.initial_capital)
@@ -228,9 +234,18 @@ class BacktestEngine:
         equity_curve = df["equity"]
         daily_returns = equity_curve.pct_change().fillna(0)
 
+        # 构建基准数据
+        benchmark_returns = pd.Series(dtype=float)
+        benchmark_curve = pd.Series(dtype=float)
+        if data is not None and "close" in data.columns:
+            benchmark_curve = data["close"].reindex(equity_curve.index)
+            benchmark_returns = benchmark_curve.pct_change().fillna(0)
+
         return BacktestResult(
             equity_curve=equity_curve,
             daily_returns=daily_returns,
+            benchmark_returns=benchmark_returns,
+            benchmark_curve=benchmark_curve,
             trades=self._trades.copy(),
             final_equity=equity_curve.iloc[-1],
             initial_capital=self.initial_capital,
