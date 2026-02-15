@@ -322,26 +322,31 @@ def monthly_returns_table(daily_returns: pd.Series) -> pd.DataFrame:
 # 综合报告
 # =====================================================================
 
-def print_report(
+def format_report(
     equity_curve: pd.Series,
     daily_returns: pd.Series,
     trades: list[dict],
     benchmark_returns: pd.Series | None = None,
     symbol: str = "",
-) -> None:
-    """打印五维度专业回测报告"""
+    strategy_name: str = "",
+) -> str:
+    """
+    生成五维度专业回测报告（Markdown 格式字符串）
 
+    Returns:
+        Markdown 格式的报告字符串
+    """
     total_ret = total_return(equity_curve)
     days = (equity_curve.index[-1] - equity_curve.index[0]).days if len(equity_curve) >= 2 else 0
     trading_days = len(equity_curve)
     annual_ret = annualized_return(total_ret, days)
     mdd = max_drawdown(equity_curve)
 
-    # 计算 Alpha / Beta
+    # Alpha / Beta
     if benchmark_returns is not None and not benchmark_returns.empty:
-        alpha, beta = alpha_beta(daily_returns, benchmark_returns)
+        alpha_val, beta_val = alpha_beta(daily_returns, benchmark_returns)
     else:
-        alpha, beta = 0.0, 0.0
+        alpha_val, beta_val = 0.0, 0.0
 
     # 效率指标
     sharpe = sharpe_ratio(daily_returns)
@@ -362,55 +367,88 @@ def print_report(
     max_loss_streak = max_consecutive_losses(trades)
     max_win_streak = max_consecutive_wins(trades)
 
-    # 格式化辅助
-    def fmt_pct(v: float) -> str:
-        return f"{v:>10.2%}"
+    # 辅助
+    def fp(v: float) -> str:
+        return f"{v:.2%}"
 
-    def fmt_f(v: float, dec: int = 2) -> str:
-        if v == float("inf"):
-            return f"{'∞':>10}"
-        return f"{v:>10.{dec}f}"
+    def ff(v: float, d: int = 2) -> str:
+        return "∞" if v == float("inf") else f"{v:.{d}f}"
 
-    def fmt_i(v: int) -> str:
-        return f"{v:>10}"
+    date_start = equity_curve.index[0].strftime("%Y-%m-%d")
+    date_end = equity_curve.index[-1].strftime("%Y-%m-%d")
 
-    WIDTH = 52
-    print("=" * WIDTH)
-    print(f"  📊 回测报告: {symbol}")
-    print(f"  📅 {equity_curve.index[0].strftime('%Y-%m-%d')} ~ {equity_curve.index[-1].strftime('%Y-%m-%d')}  ({trading_days} 交易日)")
-    print("=" * WIDTH)
-
-    # ===== 收益 =====
-    print(f"\n  {'─── 收益指标 (Returns) ───':^{WIDTH - 4}}")
-    print(f"  累计收益率 (Total Return):   {fmt_pct(total_ret)}")
-    print(f"  年化收益率 (CAGR):           {fmt_pct(annual_ret)}")
+    lines = [
+        f"📅 {date_start} ~ {date_end}（{trading_days} 交易日）",
+        "",
+        "### 收益指标 (Returns)",
+        "",
+        "| 指标 | 值 |",
+        "|------|------|",
+        f"| 累计收益率 (Total Return) | {fp(total_ret)} |",
+        f"| 年化收益率 (CAGR) | {fp(annual_ret)} |",
+    ]
     if benchmark_returns is not None:
-        print(f"  Alpha (年化超额):            {fmt_pct(alpha)}")
-        print(f"  Beta (市场相关性):           {fmt_f(beta)}")
+        lines.append(f"| Alpha (年化超额) | {fp(alpha_val)} |")
+        lines.append(f"| Beta (市场相关性) | {ff(beta_val)} |")
 
-    # ===== 风险 =====
-    print(f"\n  {'─── 风险指标 (Risk) ───':^{WIDTH - 4}}")
-    print(f"  最大回撤 (Max Drawdown):     {fmt_pct(mdd)}")
-    print(f"  回撤修复期 (Recovery):       {recovery_str:>10}")
-    print(f"  年化波动率 (Volatility):     {fmt_pct(vol)}")
+    lines += [
+        "",
+        "### 风险指标 (Risk)",
+        "",
+        "| 指标 | 值 |",
+        "|------|------|",
+        f"| 最大回撤 (Max Drawdown) | {fp(mdd)} |",
+        f"| 回撤修复期 (Recovery) | {recovery_str} |",
+        f"| 年化波动率 (Volatility) | {fp(vol)} |",
+        "",
+        "### 效率指标 (Efficiency)",
+        "",
+        "| 指标 | 值 |",
+        "|------|------|",
+        f"| 夏普比率 (Sharpe) | {ff(sharpe)} |",
+        f"| 卡玛比率 (Calmar) | {ff(calmar)} |",
+        f"| 索提诺比率 (Sortino) | {ff(sortino)} |",
+        "",
+        "### 交易统计 (Trade Stats)",
+        "",
+        "| 指标 | 值 |",
+        "|------|------|",
+        f"| 交易次数 (Total Trades) | {len(trades)} |",
+        f"| 胜率 (Win Rate) | {fp(wr)} |",
+        f"| 盈亏比 (P/L Ratio) | {ff(plr)} |",
+        f"| 期望值 (Expectancy) | {ff(exp)} |",
+        f"| 交易频率 (每N日一笔) | {ff(freq, 1)} |",
+        f"| 平均持仓 (Avg Hold Days) | {ff(avg_hold, 1)} |",
+        f"| 最大连续亏损 (Max Loss) | {max_loss_streak} |",
+        f"| 最大连续盈利 (Max Win) | {max_win_streak} |",
+    ]
 
-    # ===== 效率 =====
-    print(f"\n  {'─── 效率指标 (Efficiency) ───':^{WIDTH - 4}}")
-    print(f"  夏普比率 (Sharpe):           {fmt_f(sharpe)}")
-    print(f"  卡玛比率 (Calmar):           {fmt_f(calmar)}")
-    print(f"  索提诺比率 (Sortino):        {fmt_f(sortino)}")
+    return "\n".join(lines)
 
-    # ===== 交易统计 =====
-    print(f"\n  {'─── 交易统计 (Trade Stats) ───':^{WIDTH - 4}}")
-    print(f"  交易次数 (Total Trades):     {fmt_i(len(trades))}")
-    print(f"  胜率 (Win Rate):             {fmt_pct(wr)}")
-    plr_str = fmt_f(plr) if plr != float("inf") else f"{'∞':>10}"
-    print(f"  盈亏比 (P/L Ratio):          {plr_str}")
-    exp_str = fmt_f(exp) if exp != float("inf") else f"{'∞':>10}"
-    print(f"  期望值 (Expectancy):         {exp_str}")
-    print(f"  交易频率 (每N日一笔):        {fmt_f(freq, 1)}")
-    print(f"  平均持仓 (Avg Hold Days):    {fmt_f(avg_hold, 1)}")
-    print(f"  最大连续亏损 (Max Loss):     {fmt_i(max_loss_streak)}")
-    print(f"  最大连续盈利 (Max Win):      {fmt_i(max_win_streak)}")
 
-    print("=" * WIDTH)
+def format_monthly_table(daily_returns: pd.Series) -> str:
+    """
+    将月度收益矩阵格式化为 Markdown 表格字符串
+
+    Returns:
+        Markdown 格式的月度收益表
+    """
+    table = monthly_returns_table(daily_returns)
+    if table.empty:
+        return ""
+
+    # 表头
+    headers = ["年份"] + list(table.columns)
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join(["------"] * len(headers)) + " |",
+    ]
+
+    # 数据行
+    for year, row in table.iterrows():
+        cells = [str(year)]
+        for val in row:
+            cells.append(f"{val:.1%}" if not (val != val) else "—")
+        lines.append("| " + " | ".join(cells) + " |")
+
+    return "\n".join(lines)

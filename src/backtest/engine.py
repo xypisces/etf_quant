@@ -34,6 +34,7 @@ class BacktestResult:
     trades: list[dict] = field(default_factory=list)
     final_equity: float = 0.0
     initial_capital: float = 0.0
+    strategy_name: str = ""
 
 
 class BacktestEngine:
@@ -249,4 +250,5 @@ class BacktestEngine:
             trades=self._trades.copy(),
             final_equity=equity_curve.iloc[-1],
             initial_capital=self.initial_capital,
+            strategy_name=self.strategy.name,
         )

@@ -182,10 +182,13 @@ def plot_dashboard(
     daily_returns: pd.Series,
     benchmark_curve: pd.Series | None = None,
     symbol: str = "",
+    strategy_name: str = "",
     save_dir: str = "results",
 ) -> str | None:
     """
     综合仪表板 — 三图合一（资金曲线 + 水下回撤 + 月度热力图）
+
+    图片保存到 results/<symbol>/ 目录，文件名含时间戳
     """
     if equity_curve.empty:
         return None
@@ -205,7 +208,10 @@ def plot_dashboard(
         nrows, 1, figsize=(16, 5 * nrows),
         gridspec_kw={"height_ratios": height_ratios},
     )
-    fig.suptitle(f"回测仪表板 — {symbol}", fontsize=16, fontweight="bold", y=0.98)
+    title = f"回测仪表板 — {symbol}"
+    if strategy_name:
+        title += f" ({strategy_name})"
+    fig.suptitle(title, fontsize=16, fontweight="bold", y=0.98)
 
     # ----- 1. 资金曲线 -----
     ax1 = axes[0]
@@ -256,4 +262,13 @@ def plot_dashboard(
                      shrink=0.8)
 
     fig.tight_layout(rect=[0, 0, 1, 0.96])
-    return _save_fig(fig, save_dir, f"dashboard_{symbol}.png")
+
+    # 保存到 results/<symbol>/ 目录，文件名含时间戳
+    from datetime import datetime
+    symbol_dir = os.path.join(save_dir, symbol)
+    os.makedirs(symbol_dir, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = strategy_name.replace("(", "").replace(")", "").replace(",", "_") if strategy_name else "strategy"
+    filename = f"dashboard_{safe_name}_{ts}.png"
+    return _save_fig(fig, symbol_dir, filename)
+

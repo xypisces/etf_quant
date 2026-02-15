@@ -11,13 +11,14 @@ from src.strategy.ma_cross import MACrossStrategy
 from src.backtest.engine import BacktestEngine
 from src.risk.risk_manager import RiskManager
 from src.risk.position_sizer import PositionSizer, SizingMethod
-from src.backtest.metrics import print_report, monthly_returns_table
+from src.backtest.metrics import format_report, format_monthly_table, total_return
 from src.utils.plotting import plot_dashboard
+from src.utils.reporter import ReportWriter
 
 
 def main():
     # ===== 参数配置 =====
-    symbol = "601318"                    # 招商银行
+    symbol = "600111"
     start_date = "20200101"
     end_date = datetime.now().strftime("%Y%m%d")
 
@@ -59,29 +60,41 @@ def main():
     print(f"\n运行回测: {strategy.name}")
     result = engine.run(df)
 
-    # ===== 6. 五维度专业报告 =====
-    print_report(
-        equity_curve=result.equity_curve, # 资金曲线
+    # ===== 6. 生成报告字符串 =====
+    report_md = format_report(
+        equity_curve=result.equity_curve, # 权益曲线
         daily_returns=result.daily_returns, # 日收益率
         trades=result.trades, # 交易记录
         benchmark_returns=result.benchmark_returns, # 基准收益率
         symbol=symbol, # 标的代码
+        strategy_name=result.strategy_name, # 策略名称
+    )
+    monthly_md = format_monthly_table(result.daily_returns)
+
+    # ===== 7. 计算基准收益率 =====
+    benchmark_total_ret = None
+    if not result.benchmark_curve.empty:
+        benchmark_total_ret = total_return(result.benchmark_curve)
+
+    # ===== 8. 写入 Markdown 报告（增量追加） =====
+    writer = ReportWriter(symbol=symbol, save_dir="results")
+    writer.write_report(
+        report_md=report_md,    # 回测报告
+        monthly_table_md=monthly_md, # 月度收益表
+        strategy_name=result.strategy_name, # 策略名称
+        total_ret=total_return(result.equity_curve), # 累计收益率
+        benchmark_total_ret=benchmark_total_ret, # 基准累计收益率
     )
 
-    # ===== 7. 月度收益表 =====
-    table = monthly_returns_table(result.daily_returns)
-    if not table.empty:
-        print("\n📅 月度收益矩阵:")
-        print(table.map(lambda x: f"{x:.1%}" if not (x != x) else "—").to_string())
-
-    # ===== 8. 综合仪表板（三图合一） =====
+    # ===== 9. 综合仪表板（带时间戳命名） =====
     benchmark = result.benchmark_curve * result.initial_capital / result.benchmark_curve.iloc[0] if not result.benchmark_curve.empty else None
     plot_dashboard(
-        equity_curve=result.equity_curve, # 资金曲线
+        equity_curve=result.equity_curve, # 权益曲线
         daily_returns=result.daily_returns, # 日收益率
         benchmark_curve=benchmark, # 基准收益率
         symbol=symbol, # 标的代码
-        save_dir="results", # 保存目录
+        strategy_name=result.strategy_name, # 策略名称
+        save_dir="results", # 保存路径
     )
 
     print(f"\n共完成 {len(result.trades)} 笔交易")
