@@ -4,6 +4,8 @@ context: |
   - All reasoning and drafting must be done in English for clarity and precision.
   - The FINAL output for storage (the artifact content itself) MUST be in Chinese.
   - Apply this to all artifacts: proposal, design, specs, tasks.
+  - 每次 apply 完成后，必须更新 README.md 文档，反映新增/修改的模块、使用方式和目录结构变化
+
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
@@ -23,7 +25,3 @@ context: |
 #       - Always include a "Non-goals" section
 #     tasks:
 #       - Break tasks into chunks of max 2 hours
-
-rules:
-  tasks:
-    - 每次 apply 完成后，必须更新 README.md 文档，反映新增/修改的模块、使用方式和目录结构变化
