@@ -6,6 +6,7 @@
 
 - 🔄 **事件驱动回测** — 逐 bar 推送，与实盘逻辑一致
 - 📊 **标准化策略接口** — 继承 `Strategy` 基类即可开发新策略
+- 📈 **内置策略** — 双均线交叉 (MACross)、EMA20 回踩双支撑 (EMA20Pullback)
 - 🛡️ **内置风控** — 止损止盈、最大持仓限制
 - 💰 **仓位管理** — 支持固定比例 / ATR / Kelly 公式
 - 📈 **五维度绩效报告** — 收益、风险、效率、交易统计、月度矩阵
@@ -22,7 +23,8 @@ etf_quant/
 │   │   └── loader.py           # 统一数据加载接口 (CSV/akshare API)
 │   ├── strategy/
 │   │   ├── base.py             # Strategy 基类 + Signal 枚举
-│   │   └── ma_cross.py         # 双均线交叉策略
+│   │   ├── ma_cross.py         # 双均线交叉策略
+│   │   └── ema20_pullback.py   # EMA20 回踩双支撑策略
 │   ├── backtest/
 │   │   ├── engine.py           # 事件驱动回测引擎
 │   │   └── metrics.py          # 五维度绩效指标计算 + Markdown 格式化
@@ -61,11 +63,44 @@ uv sync
 uv run python -m src.main
 ```
 
-默认配置：
-- 标的：600111
-- 策略：双均线交叉 (MA5/MA20)
-- 初始资金：¥100,000
-- 止损/止盈：-5% / +10%
+可通过 `--config` 指定配置文件（默认读取项目根目录 `config.yaml`）：
+
+```bash
+uv run python -m src.main --config my_config.yaml
+```
+
+### 配置文件
+
+所有参数在 `config.yaml` 中集中管理，无需修改代码：
+
+```yaml
+data:
+  symbol: "600111"         # 标的代码
+  start_date: "20200101"   # 回测起始日期
+
+strategy:
+  name: "ema20_pullback"   # 策略名: ma_cross / ema20_pullback
+  params:
+    ema_period: 20
+
+risk:
+  stop_loss: -0.05
+  take_profit: 0.10
+
+engine:
+  initial_capital: 100000
+```
+
+**EMA20 回踩策略参数说明：**
+
+| 参数                 | 默认值 | 说明                         |
+| -------------------- | ------ | ---------------------------- |
+| `ema_period`         | 20     | EMA 均线周期                 |
+| `macd_fast`          | 12     | MACD 快线周期                |
+| `macd_slow`          | 26     | MACD 慢线周期                |
+| `macd_signal`        | 9      | MACD 信号线周期              |
+| `volume_period`      | 20     | 成交量均值回看窗口           |
+| `pullback_tolerance` | 0.005  | 回踩 EMA20 的容忍偏差 (0.5%) |
 
 ### 回测结果
 

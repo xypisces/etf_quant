@@ -173,6 +173,7 @@ class BacktestEngine:
         self._position = quantity
         self._entry_price = actual_price
         self._entry_date = date
+        self.strategy.on_fill(Signal.BUY)
 
     def _execute_sell(self, price: float, date: str, reason: str = "") -> None:
         """执行卖出"""
@@ -213,6 +214,7 @@ class BacktestEngine:
         self._position = 0
         self._entry_price = 0.0
         self._entry_date = ""
+        self.strategy.on_fill(Signal.SELL)
 
     def _reset(self) -> None:
         """重置引擎状态"""

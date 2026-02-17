@@ -92,6 +92,9 @@ class ReportWriter:
         # 移除旧的对比表（如果存在）
         existing = self._remove_comparison_table(existing)
 
+        # 移除同名策略的旧段落（去重）
+        existing = self._remove_strategy_section(existing, strategy_name)
+
         # 追加新策略段落
         content = existing.rstrip("\n") + "\n\n" + section_content
 
@@ -114,6 +117,25 @@ class ReportWriter:
         )
         return pattern.sub("", content).rstrip("\n")
 
+    def _remove_strategy_section(self, content: str, strategy_name: str) -> str:
+        """
+        移除报告中同名策略的旧段落
+
+        匹配 '## <strategy_name> — <date>' 开头的段落，直到下一个 '## ' 或文件末尾。
+        这样相同策略重新运行时会替换旧结果，而非重复追加。
+        """
+        # 转义策略名中的特殊字符（如括号）
+        escaped_name = re.escape(strategy_name)
+        # 匹配该策略的整个段落：从标题到下一个 ## 标题或文件末尾
+        pattern = re.compile(
+            r"## " + escaped_name + r" — \d{4}-\d{2}-\d{2}\n.*?(?=\n## |\Z)",
+            re.DOTALL,
+        )
+        result = pattern.sub("", content)
+        # 清理多余的空行和分隔线
+        result = re.sub(r"(\n---\n){2,}", "\n---\n", result)
+        return result.rstrip("\n")
+
     def _build_comparison_table(
         self,
         content: str,
@@ -125,7 +147,7 @@ class ReportWriter:
         解析逻辑: 找到 ## 标题行获取策略名，然后在其段落内找
         "累计收益率 (Total Return)" 行提取数值
         """
-        entries: list[tuple[str, float]] = []
+        entries: dict[str, tuple[str, float]] = {}
 
         # 按 ## 标题分割段落
         sections = re.split(r"(?=^## )", content, flags=re.MULTILINE)
@@ -146,17 +168,18 @@ class ReportWriter:
             if ret_match:
                 ret_str = ret_match.group(1).replace("%", "")
                 ret_val = float(ret_str) / 100
-                entries.append((f"{strategy} ({date})", ret_val))
+                # 按策略名去重，保留最新的（最后出现的）
+                entries[strategy] = (f"{strategy} ({date})", ret_val)
 
         # 添加基准
         if benchmark_total_ret is not None:
-            entries.append(("📊 买入持有 (Benchmark)", benchmark_total_ret))
+            entries["__benchmark__"] = ("📊 买入持有 (Benchmark)", benchmark_total_ret)
 
         if not entries:
             return ""
 
         # 按收益率降序排列
-        entries.sort(key=lambda x: x[1], reverse=True)
+        sorted_entries = sorted(entries.values(), key=lambda x: x[1], reverse=True)
 
         # 生成 Markdown 表格
         lines = [
@@ -167,8 +190,8 @@ class ReportWriter:
             "|------|------|-----------|------|",
         ]
 
-        best_ret = entries[0][1]
-        for i, (name, ret) in enumerate(entries, 1):
+        best_ret = sorted_entries[0][1]
+        for i, (name, ret) in enumerate(sorted_entries, 1):
             mark = "🏆 **最佳**" if ret == best_ret else ""
             lines.append(f"| {i} | {name} | {ret:.2%} | {mark} |")
 

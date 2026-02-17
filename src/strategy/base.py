@@ -47,3 +47,15 @@ class Strategy(ABC):
     def reset(self) -> None:
         """重置策略状态（用于新一轮回测）"""
         pass
+
+    def on_fill(self, signal: "Signal") -> None:
+        """
+        通知策略：订单已成交
+
+        由回测引擎在买入/卖出成功执行后调用，用于同步策略内部状态。
+        子类可重写此方法以更新持仓标记等内部状态。
+
+        Args:
+            signal: 已成交的信号类型 (BUY / SELL)
+        """
+        pass
