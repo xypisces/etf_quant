@@ -38,7 +38,7 @@ def main():
     end_date = data_cfg.get("end_date") or datetime.now().strftime("%Y%m%d")
 
     # ===== 1. 数据加载 =====
-    loader = DataLoader(cache_dir=data_cfg.get("cache_dir", "csv"))
+    loader = DataLoader(storage_dir=data_cfg.get("storage_dir", "data"))
     df = loader.load(symbol, start_date, end_date)
     if df.empty:
         print("数据加载失败，退出")

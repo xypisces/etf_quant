@@ -43,3 +43,22 @@
 #### Scenario: 配置双均线参数
 - **WHEN** 创建 `MACrossStrategy` 实例
 - **THEN** 必须（SHALL）支持指定 `short_window`（默认 5）和 `long_window`（默认 20）参数
+
+#### Scenario: 配置 EMA20 回踩策略参数
+- **WHEN** 创建 `EMA20PullbackStrategy` 实例
+- **THEN** 必须（SHALL）支持指定 `ema_period`、`macd_fast`、`macd_slow`、`macd_signal`、`volume_period`、`pullback_tolerance`、`pullback_lookback` 参数
+
+### Requirement: EMA20 回踩策略实现 (EMA20 Pullback Strategy)
+系统必须（SHALL）提供 `EMA20PullbackStrategy` 作为第二个具体策略实现，继承 `Strategy` 基类。
+
+#### Scenario: 策略可通过模块导出使用
+- **WHEN** 从 `src.strategy` 包导入
+- **THEN** 必须（SHALL）能直接导入 `EMA20PullbackStrategy` 类
+
+### Requirement: 策略成交回调 (Strategy Fill Callback)
+策略基类必须（SHALL）提供 `on_fill(signal)` 回调方法，由回测引擎在订单成交后调用。
+
+#### Scenario: 引擎通知成交
+- **WHEN** 回测引擎成功执行买入或卖出
+- **THEN** 引擎必须（SHALL）调用 `strategy.on_fill(signal)` 通知策略
+- **AND** 策略可重写该方法以同步内部持仓状态

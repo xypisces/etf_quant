@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: 统一数据加载接口 (Unified Data Loading Interface)
 系统必须（SHALL）提供统一的数据加载接口，底层对接 Storage 层读取数据，并在数据不足时自动触发增量下载。

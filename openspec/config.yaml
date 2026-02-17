@@ -5,7 +5,8 @@ context: |
   - The FINAL output for storage (the artifact content itself) MUST be in Chinese.
   - Apply this to all artifacts: proposal, design, specs, tasks.
   - 每次 apply 完成后，必须更新 README.md 文档，反映新增/修改的模块、使用方式和目录结构变化
-
+  - 每次 /opsx-new 之前，先判断是否有未完成的 /opsx，如果有，如果tasks都完成，自动进行
+  /opsx-achieve 操作再进行下一步创建，如果任务未完成，需要进行提醒操作
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.

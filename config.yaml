@@ -3,10 +3,11 @@
 
 # ===== 数据 =====
 data:
-  symbol: "000688"          # 标的代码
+  symbol: "512800"          # 标的代码
   start_date: "20200101"    # 开始日期 (YYYYMMDD)
   end_date: null            # 结束日期，null = 自动取当天
-  cache_dir: "csv"          # 数据缓存目录
+  cache_dir: "csv"          # 数据缓存目录 (旧版，兼容保留)
+  storage_dir: "data"       # 数据存储目录 (Parquet行情 + SQLite元数据)
 
 # ===== 策略 =====
 # 可选：ma_cross / ema20_pullback
