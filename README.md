@@ -6,7 +6,8 @@
 
 - 🔄 **事件驱动回测** — 逐 bar 推送，与实盘逻辑一致
 - 📊 **标准化策略接口** — 继承 `Strategy` 基类即可开发新策略
-- 📈 **内置策略** — 双均线交叉 (MACross)、EMA20 回踩双支撑 (EMA20Pullback)
+- 📈 **6 种内置策略** — 双均线交叉、EMA20 回踩、海龟、网格交易、动量轮动、均值回归
+- 🔬 **研究工具** — 批量回测 (多品种×多策略)、参数优化 (Grid Search + Walk-forward)
 - 🛡️ **内置风控** — 止损止盈、最大持仓限制
 - 💰 **仓位管理** — 支持固定比例 / ATR / Kelly 公式
 - 💾 **数据管理层** — SQLite 元数据 + Parquet 行情存储，支持增量更新
@@ -28,7 +29,14 @@ etf_quant/
 │   ├── strategy/
 │   │   ├── base.py             # Strategy 基类 + Signal 枚举
 │   │   ├── ma_cross.py         # 双均线交叉策略
-│   │   └── ema20_pullback.py   # EMA20 回踩双支撑策略
+│   │   ├── ema20_pullback.py   # EMA20 回踩双支撑策略
+│   │   ├── turtle.py           # 海龟策略 (唐奇安通道+ATR)
+│   │   ├── grid.py             # 网格交易策略
+│   │   ├── momentum.py         # 动量轮动策略 (ROC)
+│   │   └── mean_reversion.py   # 均值回归策略 (布林带+RSI)
+│   ├── research/
+│   │   ├── batch_runner.py     # 批量回测 (多品种×多策略)
+│   │   └── optimizer.py        # 参数优化 (Grid+Walk-forward)
 │   ├── backtest/
 │   │   ├── engine.py           # 事件驱动回测引擎
 │   │   └── metrics.py          # 五维度绩效指标计算 + Markdown 格式化
@@ -86,7 +94,7 @@ data:
   start_date: "20200101"   # 回测起始日期
 
 strategy:
-  name: "ema20_pullback"   # 策略名: ma_cross / ema20_pullback
+  name: "ema20_pullback"   # 策略名: ma_cross / ema20_pullback / turtle / grid / momentum / mean_reversion
   params:
     ema_period: 20
 
@@ -117,6 +125,43 @@ engine:
 
 多次运行不同策略或参数后，报告会自动增量追加，对比表自动更新排名。
 
+### 批量回测
+
+```python
+from src.research import BatchRunner
+
+runner = BatchRunner(storage_dir='data')
+results = runner.run(
+    symbols=['510300', '512800'],
+    strategies=[
+        {'name': 'turtle', 'params': {'entry_period': 20}},
+        {'name': 'momentum', 'params': {'lookback_period': 20}},
+    ],
+    start_date='20200101',
+    end_date='20260101',
+)
+print(results)  # DataFrame: symbol, strategy, total_return, sharpe_ratio, ...
+```
+
+### 参数优化
+
+```python
+from src.research import ParameterOptimizer
+
+opt = ParameterOptimizer(n_splits=5, target_metric='sharpe_ratio')
+
+# Grid Search
+results = opt.grid_search(
+    strategy_name='turtle',
+    param_space={'entry_period': [10, 20, 30], 'exit_period': [5, 10, 15]},
+    df=df,
+)
+
+# Walk-forward 交叉验证
+summary = opt.walk_forward('turtle', param_space, df)
+print(summary['warning'])  # 过拟合警告
+```
+
 ### 自定义策略
 
 继承 `Strategy` 基类，实现 `on_bar()` 和 `generate_signal()` 方法：
@@ -136,11 +181,12 @@ class MyStrategy(Strategy):
 
 ## 依赖
 
-| 包         | 用途         |
-| ---------- | ------------ |
-| pandas     | 数据处理     |
-| akshare    | 数据获取     |
-| pyarrow    | Parquet 读写 |
-| matplotlib | 可视化       |
-| numpy      | 数值计算     |
-| pyyaml     | 配置文件解析 |
+| 包         | 用途           |
+| ---------- | -------------- |
+| pandas     | 数据处理       |
+| akshare    | 数据获取       |
+| pyarrow    | Parquet 读写   |
+| matplotlib | 可视化         |
+| numpy      | 数值计算       |
+| pyyaml     | 配置文件解析   |
+| tqdm       | 批量回测进度条 |

@@ -15,6 +15,10 @@ import yaml
 from src.strategy.base import Strategy
 from src.strategy.ma_cross import MACrossStrategy
 from src.strategy.ema20_pullback import EMA20PullbackStrategy
+from src.strategy.turtle import TurtleStrategy
+from src.strategy.grid import GridStrategy
+from src.strategy.momentum import MomentumStrategy
+from src.strategy.mean_reversion import MeanReversionStrategy
 
 
 # 策略注册表: name -> class
@@ -22,6 +26,10 @@ from src.strategy.ema20_pullback import EMA20PullbackStrategy
 STRATEGY_REGISTRY: dict[str, type[Strategy]] = {
     "ma_cross": MACrossStrategy,
     "ema20_pullback": EMA20PullbackStrategy,
+    "turtle": TurtleStrategy,
+    "grid": GridStrategy,
+    "momentum": MomentumStrategy,
+    "mean_reversion": MeanReversionStrategy,
 }
 
 

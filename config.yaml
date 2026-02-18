@@ -10,7 +10,7 @@ data:
   storage_dir: "data"       # 数据存储目录 (Parquet行情 + SQLite元数据)
 
 # ===== 策略 =====
-# 可选：ma_cross / ema20_pullback
+# 可选：ma_cross / ema20_pullback / turtle / grid / momentum / mean_reversion
 strategy:
   name: "ema20_pullback"
   params:
@@ -21,12 +21,44 @@ strategy:
     # volume_period: 20
     # pullback_tolerance: 0.005
 
-# 双均线交叉策略示例：
+# 双均线交叉策略：
 # strategy:
 #   name: "ma_cross"
 #   params:
 #     short_window: 5
 #     long_window: 20
+
+# 海龟策略：
+# strategy:
+#   name: "turtle"
+#   params:
+#     entry_period: 20
+#     exit_period: 10
+#     atr_period: 14
+#     atr_multiplier: 2.0
+
+# 网格交易策略：
+# strategy:
+#   name: "grid"
+#   params:
+#     grid_num: 10
+#     lookback_period: 60
+
+# 动量轮动策略：
+# strategy:
+#   name: "momentum"
+#   params:
+#     lookback_period: 20
+
+# 均值回归策略：
+# strategy:
+#   name: "mean_reversion"
+#   params:
+#     bb_period: 20
+#     bb_std: 2.0
+#     rsi_period: 14
+#     rsi_oversold: 30
+#     rsi_overbought: 70
 
 # ===== 风控 =====
 risk:

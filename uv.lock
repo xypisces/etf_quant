@@ -318,6 +318,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pyyaml" },
+    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -328,6 +329,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=3.0.0" },
     { name = "pyarrow", specifier = ">=19.0.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
 [[package]]
