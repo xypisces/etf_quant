@@ -72,7 +72,18 @@ etf_quant/
 uv sync
 ```
 
-### 运行回测
+### 运行交互式仪表盘 (Dashboard)
+
+本系统现在提供了一个基于 Streamlit 的前端交互式界面，支持在浏览器中免代码配置参数、运行回测、监控行情和对比历史记录。
+
+```bash
+uv run streamlit run app/run_dashboard.py
+```
+启动后，浏览器将自动打开 `http://localhost:8501`。
+
+### 命令行运行回测
+
+如果需要传统的命令行批量执行或脚本自动化，可运行：
 
 ```bash
 uv run python -m src.main
@@ -181,12 +192,14 @@ class MyStrategy(Strategy):
 
 ## 依赖
 
-| 包         | 用途           |
-| ---------- | -------------- |
-| pandas     | 数据处理       |
-| akshare    | 数据获取       |
-| pyarrow    | Parquet 读写   |
-| matplotlib | 可视化         |
-| numpy      | 数值计算       |
-| pyyaml     | 配置文件解析   |
-| tqdm       | 批量回测进度条 |
+| 包         | 用途            |
+| ---------- | --------------- |
+| pandas     | 数据处理        |
+| akshare    | 数据获取        |
+| pyarrow    | Parquet 读写    |
+| matplotlib | 命令行可视化    |
+| numpy      | 数值计算        |
+| pyyaml     | 配置文件解析    |
+| tqdm       | 批量回测进度条  |
+| streamlit  | 交互式 Web 界面 |
+| plotly     | 动态交互式图表  |
