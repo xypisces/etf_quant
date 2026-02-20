@@ -1,9 +1,9 @@
 schema: spec-driven
 context: |
-  Documentation Language Rule:
-  - All reasoning and drafting must be done in English for clarity and precision.
-  - The FINAL output for storage (the artifact content itself) MUST be in Chinese.
-  - Apply this to all artifacts: proposal, design, specs, tasks.
+  文档语言规则：
+  - 为了清晰和精确，所有推理和起草都必须用英语完成。
+  - 用于存储的最终输出（工件内容本身）必须是中文。
+  - 将其应用于所有工件：提案、设计、规格、任务。
   - 每次 apply 完成后，必须更新 README.md 文档，反映新增/修改的模块、使用方式和目录结构变化
   - 每次 /opsx-new 之前，先判断是否有未完成的 /opsx，如果有，如果tasks都完成，自动进行
   /opsx-achieve 操作再进行下一步创建，如果任务未完成，需要进行提醒操作
