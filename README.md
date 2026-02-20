@@ -11,6 +11,7 @@
 - 🛡️ **内置风控** — 止损止盈、最大持仓限制
 - 💰 **仓位管理** — 支持固定比例 / ATR / Kelly 公式
 - 💾 **数据管理层** — SQLite 元数据 + Parquet 行情存储，支持增量更新
+- 📋 **全量 ETF 目录** — 自动获取 A 股全部 ETF 基金列表，本地缓存与一键刷新
 - 📈 **五维度绩效报告** — 收益、风险、效率、交易统计、月度矩阵
 - 🎨 **综合仪表板** — 资金曲线(log) + 水下回撤 + 月度热力图
 - 📝 **Markdown 持久化报告** — 按标的分目录存储，多策略增量追加
@@ -25,6 +26,7 @@ etf_quant/
 │   │   ├── loader.py           # 统一数据加载接口
 │   │   ├── storage.py          # 本地存储 (SQLite元数据 + Parquet行情)
 │   │   ├── fetcher.py          # 数据下载器 (akshare, 增量更新)
+│   │   ├── etf_catalog.py      # 全量 A 股 ETF 目录管理器
 │   │   └── cleaner.py          # 数据清洗器 (去重/排序/缺失值/类型)
 │   ├── strategy/
 │   │   ├── base.py             # Strategy 基类 + Signal 枚举
