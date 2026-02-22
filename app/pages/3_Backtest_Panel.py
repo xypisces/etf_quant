@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import datetime
 import sys
 from pathlib import Path
@@ -8,177 +9,306 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from src.config import STRATEGY_REGISTRY, create_strategy
 from src.backtest.engine import BacktestEngine
+from src.risk.position_sizer import PositionSizer
+from src.backtest.metrics import (
+    format_report,
+    format_monthly_table,
+    total_return,
+    annualized_return,
+    max_drawdown,
+    sharpe_ratio,
+)
+from src.utils.reporter import ReportWriter
+from src.data.etf_catalog import ETFCatalog
 from components.data_loader import get_recent_market_data
 
 st.set_page_config(page_title="策略回测", page_icon="📈", layout="wide")
 
 st.title("交互式策略回测面板")
 
-# --- Sidebar Configuration ---
+# ── 辅助函数 ──────────────────────────────────────────────
+
+
+@st.cache_data(ttl=3600 * 24)
+def _load_etf_name_map() -> dict[str, str]:
+    """加载 ETF code → 中文名 映射表（缓存 24h）"""
+    catalog = ETFCatalog()
+    try:
+        df = catalog.load(force_refresh=False)
+        return dict(zip(df["code"], df["name"]))
+    except Exception:
+        return {}
+
+
+def _get_etf_name(symbol: str, name_map: dict[str, str]) -> str:
+    return name_map.get(symbol, "")
+
+
+# 策略中文名映射
+STRATEGY_LABELS: dict[str, str] = {
+    "ma_cross": "双均线交叉",
+    "ema20_pullback": "EMA20 回踩",
+    "turtle": "海龟策略",
+    "grid": "网格交易",
+    "momentum": "动量轮动",
+    "mean_reversion": "均值回归",
+}
+
+# ── 侧边栏配置 ─────────────────────────────────────────────
+
+name_map = _load_etf_name_map()
+
 st.sidebar.header("回测配置")
 
-# 1. Symbol Selection (simplified)
+# 1. 品种选择
 symbol = st.sidebar.text_input("交易品种代码 (如: 510300)", value="510300")
-backtest_days = st.sidebar.select_slider("数据时间范围 (天)", options=[30, 90, 180, 365, 730], value=365)
+
+# 显示中文名
+etf_name = _get_etf_name(symbol, name_map)
+if etf_name:
+    st.sidebar.markdown(f"**{symbol}** — {etf_name}")
+else:
+    if symbol:
+        st.sidebar.caption(f"⚠️ 未找到 {symbol} 的中文名称")
+
+backtest_days = st.sidebar.select_slider(
+    "数据时间范围 (天)", options=[30, 90, 180, 365, 730], value=365
+)
 
 st.sidebar.markdown("---")
 
-# 2. Strategy Selection
-strategy_name = st.sidebar.selectbox("选择策略", options=list(STRATEGY_REGISTRY.keys()))
+# 2. 多策略选择
+strategy_options = list(STRATEGY_REGISTRY.keys())
+display_labels = [f"{STRATEGY_LABELS.get(k, k)} ({k})" for k in strategy_options]
+label_to_key = dict(zip(display_labels, strategy_options))
 
-# 3. Dynamic Strategy Parameters Form
-st.sidebar.subheader("策略参数")
-params = {}
-with st.sidebar.form(key="strategy_params_form"):
-    if strategy_name == "ma_cross":
-        params["short_window"] = st.number_input("短期均线窗口", min_value=1, max_value=250, value=10)
-        params["long_window"] = st.number_input("长期均线窗口", min_value=1, max_value=250, value=30)
-    elif strategy_name == "ema20_pullback":
-        params["ema_period"] = st.number_input("EMA 周期", min_value=1, value=20)
-    elif strategy_name == "turtle":
-        params["entry_window"] = st.number_input("入场通道 (天)", min_value=10, value=20)
-        params["exit_window"] = st.number_input("出场通道 (天)", min_value=5, value=10)
-    elif strategy_name == "grid":
-        params["grid_num"] = st.number_input("网格数量", min_value=2, value=10)
-        params["grid_size"] = st.number_input("网格间距 (%)", min_value=0.1, value=1.0, format="%.2f") / 100.0
-    elif strategy_name == "momentum":
-        params["lookback"] = st.number_input("动量回溯期", min_value=5, value=20)
-    elif strategy_name == "mean_reversion":
-        params["window"] = st.number_input("回归窗口", min_value=5, value=20)
-        params["z_score_threshold"] = st.number_input("Z-Score 阈值", min_value=0.5, value=2.0)
-    
-    submit_button = st.form_submit_button(label="🚀 运行回测")
+selected_labels = st.sidebar.multiselect(
+    "选择策略（可多选）",
+    options=display_labels,
+    default=[display_labels[0]],
+)
+selected_strategies = [label_to_key[lb] for lb in selected_labels]
 
-# --- Main Area Execution ---
+# 3. 引擎参数
+st.sidebar.markdown("---")
+st.sidebar.subheader("引擎参数")
+initial_capital = st.sidebar.number_input(
+    "初始资金 (¥)", min_value=10000, value=100000, step=10000
+)
+commission_rate = st.sidebar.number_input(
+    "手续费率", min_value=0.0, value=0.0003, step=0.0001, format="%.4f"
+)
 
-if submit_button:
+# 4. 运行按钮
+run_clicked = st.sidebar.button("🚀 运行回测", use_container_width=True)
+
+# ── 主区域 ─────────────────────────────────────────────────
+
+if run_clicked:
     if not symbol:
         st.error("请输入有效的交易品种代码。")
+    elif not selected_strategies:
+        st.error("请至少选择一个策略。")
     else:
-        with st.spinner("正在加载数据并运行回测..."):
-            # 1. Fetch Data
+        # — 加载数据 —
+        with st.spinner("正在加载行情数据..."):
             df = get_recent_market_data(symbol, period_days=backtest_days)
-            
-            if df.empty:
-                st.error(f"无法获取 {symbol} 的行情数据，请检查代码或网络连接。")
-            else:
-                # 2. Initialize Engine & Strategy
+
+        if df.empty:
+            st.error(f"无法获取 {symbol} 的行情数据，请检查代码或网络连接。")
+        else:
+            # 显示标题（含中文名）
+            title_suffix = f" ({etf_name})" if etf_name else ""
+            st.success(
+                f"数据加载完成：{symbol}{title_suffix}  |  "
+                f"{len(df)} 根 K 线  |  "
+                f"{df.index[0].strftime('%Y-%m-%d')} ~ {df.index[-1].strftime('%Y-%m-%d')}"
+            )
+
+            # — 循环回测所有策略 —
+            all_results: list[dict] = []
+            progress = st.progress(0, text="回测进行中...")
+
+            for i, sname in enumerate(selected_strategies):
+                progress.progress(
+                    (i + 1) / len(selected_strategies),
+                    text=f"正在回测: {STRATEGY_LABELS.get(sname, sname)}...",
+                )
                 try:
-                    strategy = create_strategy({"name": strategy_name, "params": params})
+                    strategy = create_strategy({"name": sname, "params": {}})
                     engine = BacktestEngine(
                         strategy=strategy,
-                        initial_capital=100000.0,
-                        commission_rate=0.0003
+                        position_sizer=PositionSizer(risk_fraction=0.95),
+                        initial_capital=initial_capital,
+                        commission_rate=commission_rate,
                     )
-                    
-                    # 3. Run Backtest
                     result = engine.run(df)
-                    st.success("回测执行完成！")
-                    
-                    # --- Presentation ---
-                    
-                    # Store result in session state to persist it during other interactions
-                    st.session_state['latest_result'] = result
-                    st.session_state['latest_data'] = df
-                    st.session_state['run_info'] = f"{symbol} | {strategy.name} | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                    
+                    all_results.append({
+                        "name": sname,
+                        "display_name": STRATEGY_LABELS.get(sname, sname),
+                        "strategy_name": result.strategy_name,
+                        "result": result,
+                    })
                 except Exception as e:
-                    st.error(f"回测运行出错: {e}")
+                    st.warning(f"策略 {sname} 回测失败: {e}")
 
-# Display the latest result if it exists in session state
-if 'latest_result' in st.session_state:
-    result = st.session_state['latest_result']
-    df = st.session_state['latest_data']
-    
-    st.markdown(f"### 📊 回测报告: `{st.session_state['run_info']}`")
-    
-    # KPIs Layout
-    from src.backtest.metrics import total_return, annualized_return, max_drawdown, sharpe_ratio
-    
-    eq_curve = result.equity_curve
-    days = (eq_curve.index[-1] - eq_curve.index[0]).days if len(eq_curve) > 1 else 1
-    
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("最终净值", f"¥{result.final_equity:,.2f}")
-    
-    tr = total_return(eq_curve)
-    col2.metric("累计收益率", f"{tr:.2%}")
-    
-    mdd = max_drawdown(eq_curve)
-    col3.metric("最大回撤", f"{mdd:.2%}")
-    
-    sharpe = sharpe_ratio(result.daily_returns)
-    col4.metric("夏普比率", f"{sharpe:.2f}")
-    
-    st.markdown("---")
-    
-    # Main Plot (Equity Curve + Trades)
-    st.markdown("### 📈 净值曲线与交易标记")
-    
-    fig = go.Figure()
-    
-    # Equity curve
-    fig.add_trace(go.Scatter(x=eq_curve.index, y=eq_curve.values, mode='lines', name='策略净值', line=dict(color='blue')))
-    
-    # If we have a benchmark
-    if not result.benchmark_curve.empty:
-        # Rebase benchmark to initial capital
-        bench_rebased = (result.benchmark_curve / result.benchmark_curve.iloc[0]) * result.initial_capital
-        fig.add_trace(go.Scatter(x=bench_rebased.index, y=bench_rebased.values, mode='lines', name='基准净值 (持股)', line=dict(color='gray', dash='dash')))
-        
-    trades_df = pd.DataFrame(result.trades)
-    if not trades_df.empty:
-        # Mark entries (Buy) and exits (Sell)
-        # Note: Depending on engine logic, we might only have "round turn" trades recorded in result.trades
-        # For a more detailed plot, we use date_open for entry and date_close for exit
-        
-        # Prepare entry points (green triangles)
-        entries = trades_df.copy()
-        entries['date'] = pd.to_datetime(entries['date_open'])
-        entries = entries.dropna(subset=['date']).set_index('date')
-        
-        # We need to map the Y coordinate to the equity curve at that date (or price)
-        # We'll plot on secondary Y axis if we want price, but for simplicity we'll just plot price 
-        # below or create a subplots. Let's create a combined chart with Price on Y1 and Equity on Y2
-        
-        from plotly.subplots import make_subplots
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        
-        # Price
-        fig.add_trace(go.Scatter(x=df.index, y=df['收盘'], mode='lines', name='价格', line=dict(color='lightgray')), secondary_y=False)
-        
-        # Equity
-        fig.add_trace(go.Scatter(x=eq_curve.index, y=eq_curve.values, mode='lines', name='策略净值', line=dict(color='blue')), secondary_y=True)
-        
-        # Entries
-        for _, row in trades_df.iterrows():
-            # Buy marker
-            dt_open = pd.to_datetime(row['date_open'])
-            if dt_open in df.index:
-                price = row['entry_price']
-                fig.add_trace(go.Scatter(x=[dt_open], y=[price], mode='markers', marker=dict(symbol='triangle-up', color='green', size=10), name='Buy', showlegend=False), secondary_y=False)
-            
-            # Sell marker
-            dt_close = pd.to_datetime(row['date_close'])
-            if dt_close in df.index:
-                price = row['exit_price']
-                color = 'green' if row['pnl'] > 0 else 'red'
-                fig.add_trace(go.Scatter(x=[dt_close], y=[price], mode='markers', marker=dict(symbol='triangle-down', color=color, size=10), name='Sell/Close', showlegend=False), secondary_y=False)
+            progress.empty()
 
-    fig.update_layout(height=500, title="策略执行明细", hovermode="x unified")
-    st.plotly_chart(fig)
-    
-    # Detailed text report
-    st.markdown("### 📑 详细指标与统计")
-    from src.backtest.metrics import format_report
-    detailed_report = format_report(
-        equity_curve=result.equity_curve,
-        daily_returns=result.daily_returns,
-        trades=result.trades,
-        benchmark_returns=result.benchmark_returns
+            if not all_results:
+                st.error("所有策略回测均失败。")
+            else:
+                # 存入 session_state
+                st.session_state["backtest_results"] = all_results
+                st.session_state["backtest_df"] = df
+                st.session_state["backtest_symbol"] = symbol
+                st.session_state["backtest_etf_name"] = etf_name
+
+                # — 写入报告 —
+                with st.spinner("正在写入报告..."):
+                    writer = ReportWriter(symbol=symbol, save_dir="results")
+                    for item in all_results:
+                        r = item["result"]
+                        report_md = format_report(
+                            equity_curve=r.equity_curve,
+                            daily_returns=r.daily_returns,
+                            trades=r.trades,
+                            benchmark_returns=r.benchmark_returns,
+                            symbol=symbol,
+                            strategy_name=r.strategy_name,
+                        )
+                        monthly_md = format_monthly_table(r.daily_returns)
+
+                        benchmark_ret = None
+                        if not r.benchmark_curve.empty:
+                            benchmark_ret = total_return(r.benchmark_curve)
+
+                        writer.write_report(
+                            report_md=report_md,
+                            monthly_table_md=monthly_md,
+                            strategy_name=r.strategy_name,
+                            total_ret=total_return(r.equity_curve),
+                            benchmark_total_ret=benchmark_ret,
+                        )
+
+                st.toast(
+                    f"📝 报告已写入 results/{symbol}/report.md",
+                    icon="✅",
+                )
+
+
+# ── 结果展示 ────────────────────────────────────────────────
+
+if "backtest_results" in st.session_state:
+    all_results = st.session_state["backtest_results"]
+    df = st.session_state["backtest_df"]
+    symbol = st.session_state["backtest_symbol"]
+    etf_name = st.session_state["backtest_etf_name"]
+
+    title_suffix = f" ({etf_name})" if etf_name else ""
+    st.markdown(f"## 📊 回测报告: {symbol}{title_suffix}")
+
+    # ── KPI 对比表 ──
+    st.markdown("### 🏆 策略对比")
+    kpi_rows = []
+    for item in all_results:
+        r = item["result"]
+        eq = r.equity_curve
+        tr = total_return(eq)
+        days = (eq.index[-1] - eq.index[0]).days if len(eq) > 1 else 1
+        kpi_rows.append({
+            "策略": item["strategy_name"],
+            "最终净值": f"¥{r.final_equity:,.2f}",
+            "累计收益率": f"{tr:.2%}",
+            "年化收益率": f"{annualized_return(tr, days):.2%}",
+            "最大回撤": f"{max_drawdown(eq):.2%}",
+            "夏普比率": f"{sharpe_ratio(r.daily_returns):.2f}",
+            "交易次数": len(r.trades),
+        })
+
+    kpi_df = pd.DataFrame(kpi_rows)
+    st.dataframe(kpi_df, use_container_width=True, hide_index=True)
+
+    # ── 叠加净值曲线 ──
+    st.markdown("### 📈 净值曲线对比")
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # 价格线
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["收盘"],
+            mode="lines",
+            name="价格",
+            line=dict(color="rgba(180,180,180,0.5)", width=1),
+        ),
+        secondary_y=False,
     )
-    # format_report returns markdown, we can render it directly
-    st.markdown(detailed_report)
-    
+
+    # 各策略净值
+    colors = [
+        "#2196F3", "#FF5722", "#4CAF50", "#9C27B0", "#FF9800", "#00BCD4",
+    ]
+    for idx, item in enumerate(all_results):
+        r = item["result"]
+        color = colors[idx % len(colors)]
+        fig.add_trace(
+            go.Scatter(
+                x=r.equity_curve.index,
+                y=r.equity_curve.values,
+                mode="lines",
+                name=item["strategy_name"],
+                line=dict(color=color, width=2),
+            ),
+            secondary_y=True,
+        )
+
+    # 基准净值（取第一个结果的 benchmark）
+    first_r = all_results[0]["result"]
+    if not first_r.benchmark_curve.empty:
+        bench_rebased = (
+            first_r.benchmark_curve
+            / first_r.benchmark_curve.iloc[0]
+            * first_r.initial_capital
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=bench_rebased.index,
+                y=bench_rebased.values,
+                mode="lines",
+                name="基准 (买入持有)",
+                line=dict(color="gray", dash="dash", width=1.5),
+            ),
+            secondary_y=True,
+        )
+
+    fig.update_layout(
+        height=550,
+        title="策略净值 vs 价格走势",
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    fig.update_yaxes(title_text="价格", secondary_y=False)
+    fig.update_yaxes(title_text="净值 (¥)", secondary_y=True)
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ── 每策略详细报告（可展开） ──
+    st.markdown("### 📑 各策略详细指标")
+    for item in all_results:
+        r = item["result"]
+        with st.expander(f"📋 {item['strategy_name']}", expanded=len(all_results) == 1):
+            detailed_report = format_report(
+                equity_curve=r.equity_curve,
+                daily_returns=r.daily_returns,
+                trades=r.trades,
+                benchmark_returns=r.benchmark_returns,
+            )
+            st.markdown(detailed_report)
+
+            monthly_md = format_monthly_table(r.daily_returns)
+            if monthly_md:
+                st.markdown("#### 月度收益矩阵")
+                st.markdown(monthly_md)
+
 else:
     st.info("👈 请在左侧配置参数并点击「运行回测」开始计算。")
