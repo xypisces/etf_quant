@@ -226,7 +226,7 @@ if "backtest_results" in st.session_state:
         })
 
     kpi_df = pd.DataFrame(kpi_rows)
-    st.dataframe(kpi_df, use_container_width=True, hide_index=True)
+    st.dataframe(kpi_df, width="stretch", hide_index=True)
 
     # ── 叠加净值曲线 ──
     st.markdown("### 📈 净值曲线对比")
@@ -290,7 +290,7 @@ if "backtest_results" in st.session_state:
     )
     fig.update_yaxes(title_text="价格", secondary_y=False)
     fig.update_yaxes(title_text="净值 (¥)", secondary_y=True)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     # ── 每策略详细报告（可展开） ──
     st.markdown("### 📑 各策略详细指标")

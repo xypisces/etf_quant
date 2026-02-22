@@ -140,7 +140,7 @@ def display_ranking(ranking_df: pd.DataFrame, top_n: int = 0) -> None:
 
     st.dataframe(
         display_df.style.background_gradient(subset=["动量得分"], cmap="RdYlGn"),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 

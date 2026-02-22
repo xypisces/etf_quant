@@ -70,7 +70,7 @@ else:
                 lambda val: f'color: {"red" if val > 0 else "green" if val < 0 else "black"}',
                 subset=['区间收益率(%)']
             ),
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
 
@@ -99,6 +99,6 @@ else:
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.warning("未能获取到所选 ETF 的有效数据。")
