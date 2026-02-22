@@ -81,6 +81,8 @@ uv sync
 本系统现在提供了一个基于 Streamlit 的前端交互式界面，支持在浏览器中免代码配置参数、运行回测、监控行情和对比历史记录。
 
 ```bash
+make dashboard
+# 或使用完整命令
 uv run streamlit run app/run_dashboard.py
 ```
 启动后，浏览器将自动打开 `http://localhost:8501`。
@@ -90,12 +92,16 @@ uv run streamlit run app/run_dashboard.py
 如果需要传统的命令行批量执行或脚本自动化，可运行：
 
 ```bash
+make backtest
+# 或使用完整命令
 uv run python -m src.main
 ```
 
 可通过 `--config` 指定配置文件（默认读取项目根目录 `config.yaml`）：
 
 ```bash
+make backtest ARGS="--config my_config.yaml"
+# 或使用完整命令
 uv run python -m src.main --config my_config.yaml
 ```
 
